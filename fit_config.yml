@@ -1,0 +1,87 @@
+
+general:
+  hist_name_data: 'h_mjj_sig'
+  hist_name_signal: 'h_mjj_sig'
+
+  # Signal properties
+  signal_mass: 350 
+  xs: 1000
+  lumi: 22.8
+  rebin: 5
+
+  inject_signal: 0
+
+fit_settings:
+  range: [200, 700] # If null, just fit over the whole range
+
+  r: 1 # Overrides assumption of 1
+
+  # Description of signal functions (make sure variables are declared in order called)
+  signal: 'fit'                 # Options are 'zero', 'template' and 'fit'
+  signal_function: 'DSCB'
+  DSCB:
+    init:
+      a: 1000
+      mu: 350
+      sigma: 50
+      n_low: 2
+      alpha_low: 1
+      n_high: 2
+      alpha_high: 1
+    bounds:
+      a: [null, null]
+      mu: [250, 450]
+      sigma: [30, 200]
+      n_low: [1.0, 50]
+      alpha_low: [0.1, 50]
+      n_high: [1.0, 50]
+      alpha_high: [0.1, 50]
+
+  # Description of background functions (make sure variables are declared in order called)
+  background_function: 'mod_exp'
+  #background_function: 'poly_ext' 
+  mod_exp:
+    init:
+      p0: 1000
+      p1: -210
+      p2: 1.18
+      p3: 6.8
+      p4: 85
+    bounds:
+      p0: [null, null]
+      p1: [-280, -150]
+      p2: [0.7, 3.0]
+      p3: [1.0, 20.0]
+      p4: [50, 150]
+
+  poly_ext:
+    init:
+      p0: 1
+      p1: 50
+      p2: 2
+      p3: 0.1
+      p4: -10
+    bounds:
+      p0: [null, null]
+      p1: [null, null]
+      p2: [null, null]
+      p3: [null, null]
+      p4: [null, null]
+
+kernel_settings:
+  exponentiate_params: False     
+  kernel: 'RBF' 
+
+  # Kernel description (make sure variables are declared in order called)
+  RBF: &RBF
+    init:
+      variance: 1000
+      length_scale: 5
+    bounds:
+      variance: [10, null]
+      length_scale: [1.0, 50.0]
+  
+  Gibbs: &Gibbs
+    << *RBF
+
+  
