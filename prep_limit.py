@@ -2,7 +2,7 @@
 import ROOT
 import scipy.linalg
 ROOT.EnableImplicitMT()
-import os, sys, glob, pickle, argparse, subprocess, multiprocessing, itertools
+import os, sys, glob, pickle, argparse, subprocess, multiprocessing, itertools, yaml
 import numpy as np
 import numba
 import scipy
@@ -22,9 +22,11 @@ plt.style.use(hep.style.CMS)
 #plt.rcParams["figure.figsize"] = (12.5, 15.0)
 cols = ['#4285f4','#ea4335','#fbbc05','#34a853', '#a00498', '#536267']
 
-import yaml
+# Repo imports
+from mean_functions import *
+from kernels import *
 
-######### Functions ###############
+######### Stats ###############
 def get_chi2(y, y_err, y_pred, y_pred_err, use_pred_err=False):
     """
     Calculate the chi2 value for the given data and model predictions.
@@ -42,124 +44,7 @@ def get_chi2(y, y_err, y_pred, y_pred_err, use_pred_err=False):
         chi2 = np.sum(((y - y_pred) / y_err)**2)
     return chi2
 
-# Function
-@numba.njit
-def DSCB_pdf(x, a, mu, sigma, n_low, alpha_low, n_high, alpha_high):
-    """
-    Double sided Crystal-Ball
-    
-    https://arxiv.org/abs/1606.03833
-    
-    [floating normalization]
-    
-    Args:
-        par: mu > 0, sigma > 0, n_low > 1, alpha_low > 0, n_high > 1, alpha_high > 0
-    """
-    # Piece wise definition
-    y = np.zeros(len(x))
-    t = (x - mu) / max(sigma, 1E-12)
-    
-    ind_0 = (-alpha_low <= t) & (t <= alpha_high)
-    ind_1 = t < -alpha_low
-    ind_2 = t >  alpha_high
-
-    y[ind_0] = np.exp(- 0.5 * t[ind_0]**2)
-    y[ind_1] = np.exp(- 0.5 * alpha_low**2)  * (alpha_low / n_low   * (n_low / alpha_low   - alpha_low  - t[ind_1]))**(-n_low)
-    y[ind_2] = np.exp(- 0.5 * alpha_high**2) * (alpha_high / n_high * (n_high / alpha_high - alpha_high + t[ind_2]))**(-n_high)
-    
-    return a * y
-
-@numba.njit
-def mod_exp_simpson(x, p0, p1, p2, p3, p4):
-    dx = (x[1] - x[0]) * 0.5
-    h = (x[1] - x[0])/3
-    xa = x - dx
-    xb = x - dx + h
-    xc = x - dx + 2*h
-    xd = x + dx
-
-    xa = xa / 13600
-    xb = xb / 13600
-    xc = xc / 13600
-    xd = xd / 13600
-
-    ya = p0 * np.exp((p1 * (xa ** p2)) + (p3 * ((1 - xa) ** p4)))
-    yb = p0 * np.exp((p1 * (xb ** p2)) + (p3 * ((1 - xb) ** p4)))
-    yc = p0 * np.exp((p1 * (xc ** p2)) + (p3 * ((1 - xc) ** p4)))
-    yd = p0 * np.exp((p1 * (xd ** p2)) + (p3 * ((1 - xd) ** p4)))
-
-    y = (1.0/8.0)*(ya + (3*yb) + (3*yc) + yd)
-
-    return y
-
-@numba.njit
-def poly_ext_simpson(x, p0, p1, p2, p3, p4):
-    dx = (x[1] - x[0]) * 0.5
-    h = (x[1] - x[0])/3
-    xa = x - dx
-    xb = x - dx + h
-    xc = x - dx + 2*h
-    xd = x + dx
-
-    xa = xa / 13600
-    xb = xb / 13600
-    xc = xc / 13600
-    xd = xd / 13600
-
-    ya = p0 * ((1 - xa) ** p1) * (1 + (p4*xa)) * (xa ** -(p2 + p3 * np.log(xa)))
-    yb = p0 * ((1 - xb) ** p1) * (1 + (p4*xb)) * (xb ** -(p2 + p3 * np.log(xb)))
-    yc = p0 * ((1 - xc) ** p1) * (1 + (p4*xa)) * (xa ** -(p2 + p3 * np.log(xc)))
-    yd = p0 * ((1 - xd) ** p1) * (1 + (p4*xa)) * (xa ** -(p2 + p3 * np.log(xd)))
-
-    y = (1.0/8.0)*(ya + (3*yb) + (3*yc) + yd)
-    return y
-
-############## Kernels ####################
-# Scale function 
-def scale_func(x, b=5e-2, c=30.0):
-    return b*x + c
-
-# Simplest kernel (RBF)
-# Takes N x M arrays where N is the number of points and M is the dimensionality of each point
-def exponentiated_quadratic(xa, xb, variance, scale):
-    """Exponentiated quadratic  with K=1"""
-    # L2 distance (Squared Euclidian)
-    sq_norm = -0.5 * scipy.spatial.distance.cdist(xa, xb, 'sqeuclidean')/scale**2
-    return variance*np.exp(sq_norm)
-
-# Modified Gibbs kernel 
-def modified_gibbs(xa, xb, variance, a, b, c, d):
-    scale_a = scale_func(xa, b, c)
-    scale_b = scale_func(xb, b, c)
-
-    # Operations between x values
-    cdist = scipy.spatial.distance.cdist(xa, xb, 'sqeuclidean')
-    xa_broadcast = xa[:, None, :]
-    xb_broadcast = xb[None, :, :]
-    x_sum = xa_broadcast + xb_broadcast
-
-    # Operations between scales
-    scale_a = scale_a[:, None, :]
-    scale_b = scale_b[None, :, :]
-    scale_quadrature = scale_a**2 + scale_b**2
-    scale_diff = scale_a - scale_b
-    scale_product = scale_a*scale_b
-
-    # Shape down to 2D (similar dimension to cdist)
-    reshape_shape = (cdist.shape[0], cdist.shape[1])
-    x_sum = x_sum.reshape(*reshape_shape)
-    scale_quadrature = scale_quadrature.reshape(*reshape_shape)
-    scale_diff = scale_diff.reshape(*reshape_shape)
-    scale_product = scale_product.reshape(*reshape_shape)
-
-    # Calculate the kernel
-    amplitude = variance*np.exp((d - x_sum)/(2*a))
-    scale_term = np.sqrt(2*scale_product/scale_quadrature)
-    exp_term = np.exp(-cdist/scale_quadrature)
-
-    return amplitude*scale_term*exp_term
-
-############# GPR ################
+############# GPR likelihood definition ################
 def GP_noise(params,X1, y1, X2, kernel_func, noise):
     """
     Calculate the posterior mean (non-parametric part) and covariance matrix for y2

@@ -75,11 +75,11 @@ kernel_settings:
   # Kernel description (make sure variables are declared in order called)
   RBF: &RBF
     init:
-      variance: 1000
-      length_scale: 5
+      variance: 1.0e+3
+      length_scale: 20.0
     bounds:
-      variance: [10, null]
-      length_scale: [1.0, 50.0]
+      variance: [1.0, 1.0e+10]
+      length_scale: [10.0, 50.0]
   
   Gibbs: &Gibbs
     << *RBF

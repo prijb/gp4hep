@@ -4,7 +4,7 @@
 
 The script, `prep_limit.py` performs Gaussian Process Regression (GPR) on data with signal extraction features. It is steered by the config file `fit_config.yml`.
 
-The steering config `fit_config.yml` allows one to specify various things including those pertaining to data loading (histogram names, ranges and rebinning), signal features (mass, cross section and integrated luminosity), signal injection and signal extraction (background-only, template or parametric fit to signal). It also allows for the specification of a mean function to be passed to the GP as a prior provided it is already declared in `prep_limit.py`. Kernel and function initial parameters and bounds are declared in the config with any additional hardcoding done in the running script.
+The steering config `fit_config.yml` allows one to specify various things including those pertaining to data loading (histogram names, ranges and rebinning), signal features (mass, cross section and integrated luminosity), signal injection and signal extraction (background-only, template or parametric fit to signal). It also allows for the specification of a mean function to be passed to the GP as a prior provided it is already declared in `mean_functions.py` and kernel functions defined in `kernels.py`. Kernel and function initial parameters and bounds are declared in the config with any additional hardcoding done in the running script.
 
 ## Requirements
 
