@@ -27,7 +27,7 @@ conda env create -f environment.yml
 The script can be run with the following command:
 
 ```bash
-python3 gp4hep/prep_limit.py --input_file /home/pb4918/Physics/Projects/L1Scouting/GPR/GPRJul25/Data/2025/processed_data_2025_1gev_50ls.root --input_file_sig /home/pb4918/Physics/Projects/L1Scouting/GPR/GPRJul25/Data/Signal/processed_output_ztoqq_mlm_350.root --output test --config gp4hep/fit_config.yml
+python3 gp4hep/prep_limit.py [OPTIONS]
 ```
 
 ### Options
