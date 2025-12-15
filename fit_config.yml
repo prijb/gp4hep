@@ -6,7 +6,7 @@ general:
   # Signal properties
   signal_mass: 350 
   xs: 1000
-  lumi: 22.8
+  lumi: 228
   rebin: 5
 
   inject_signal: 0
@@ -21,46 +21,47 @@ fit_settings:
   signal_function: 'DSCB'
   DSCB:
     init:
-      a: 1000
-      mu: 350
-      sigma: 50
-      n_low: 2
-      alpha_low: 1
-      n_high: 2
-      alpha_high: 1
+      a: 1000.0
+      mu: 350.0
+      sigma: 50.0
+      n_low: 2.0
+      alpha_low: 1.0
+      n_high: 2.0
+      alpha_high: 1.0
     bounds:
       a: [null, null]
-      mu: [250, 450]
-      sigma: [30, 200]
-      n_low: [1.0, 50]
-      alpha_low: [0.1, 50]
-      n_high: [1.0, 50]
-      alpha_high: [0.1, 50]
+      mu: [250.0, 450.0]
+      sigma: [30.0, 200.0]
+      n_low: [1.0, 50.0]
+      alpha_low: [0.1, 50.0]
+      n_high: [1.0, 50.0]
+      alpha_high: [0.1, 50.0]
 
   # Description of background functions (make sure variables are declared in order called)
   background_function: 'mod_exp'
   #background_function: 'poly_ext' 
+  #background_function: null
   mod_exp:
     init:
-      p0: 1000
-      p1: -210
+      p0: 1000.0
+      p1: -210.0
       p2: 1.18
       p3: 6.8
-      p4: 85
+      p4: 85.0
     bounds:
       p0: [null, null]
-      p1: [-280, -150]
+      p1: [-280.0, -150.0]
       p2: [0.7, 3.0]
       p3: [1.0, 20.0]
-      p4: [50, 150]
+      p4: [50.0, 150.0]
 
   poly_ext:
     init:
-      p0: 1
-      p1: 50
-      p2: 2
+      p0: 1.0
+      p1: 50.0
+      p2: 2.0
       p3: 0.1
-      p4: -10
+      p4: -10.0
     bounds:
       p0: [null, null]
       p1: [null, null]
@@ -69,19 +70,31 @@ fit_settings:
       p4: [null, null]
 
 kernel_settings:
-  exponentiate_params: False     
+  exponentiate_params: True     
   kernel: 'RBF' 
 
   # Kernel description (make sure variables are declared in order called)
   RBF: &RBF
     init:
-      variance: 1.0e+3
-      length_scale: 20.0
+      variance: 1.0e+5
+      length_scale: 10.0
     bounds:
-      variance: [1.0, 1.0e+10]
-      length_scale: [10.0, 50.0]
+      variance: [1.0, null]
+      length_scale: [5.0, 50.0]
   
   Gibbs: &Gibbs
-    << *RBF
+    init:
+      variance: 1.0e+3
+      a: 1.0
+      b: 1.0
+      c: 1.0
+      d: 1.0
+
+    bounds:
+      variance: [1.0, 1.0e+10]
+      a: [null, null]
+      b: [0.1, null]
+      c: [0.1, null]
+      d: [null, null]
 
   

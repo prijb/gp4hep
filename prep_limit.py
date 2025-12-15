@@ -66,18 +66,19 @@ def GP_noise(params,X1, y1, X2, kernel_func, noise):
 def gp_lml(params, x, y, noise, bkg_func, n_bkg_params, sig_func, n_sig_params, kernel_func):
     X = x[:, None]
     Y = y[:, None]
-    y_prior_bkg = np.zeros_like(y)
-    y_prior_sig = np.zeros_like(y)
+    y_prior_bkg = np.zeros_like(Y)
+    y_prior_sig = np.zeros_like(Y)
 
     bkg_params = None
     signal_params = None
 
     if n_bkg_params > 0:
         bkg_params = params[:n_bkg_params]
-        if n_sig_params > 0:
-            signal_params = params[n_bkg_params:n_bkg_params+n_sig_params]
-            y_prior_sig = sig_func(X.reshape(-1), *signal_params)[:, None]
         y_prior_bkg = bkg_func(X, *bkg_params)
+
+    if n_sig_params > 0:
+        signal_params = params[n_bkg_params:n_bkg_params+n_sig_params]
+        y_prior_sig = sig_func(X.reshape(-1), *signal_params)[:, None]
 
     kernel_params = params[n_bkg_params+n_sig_params:-1]
     
@@ -94,7 +95,7 @@ def gp_template_lml(params, x, y, noise, bkg_func, n_bkg_params, ys, kernel_func
     X = x[:, None]
     Y = y[:, None]
     YS = ys[:, None]
-    y_prior_bkg = np.zeros_like(y)
+    y_prior_bkg = np.zeros_like(Y)
 
     bkg_params = None
 
@@ -219,47 +220,54 @@ if __name__ == "__main__":
     elif bkg_func_name == "poly_ext":
         print("\nUsing extended polynomial for bkg")
         bkg_func = poly_ext_simpson
+    elif bkg_func_name == None:
+        print("\nNo mean function passed")
     else:
         print(f"\nInvalid function {bkg_func_name}")
         sys.exit(2)
 
-    params_bkg = config["fit_settings"][bkg_func_name]["init"]
-    bounds_bkg = config["fit_settings"][bkg_func_name]["bounds"]
+    params_bkg = dict()
+    bounds_bkg = dict()
 
-    #### Manually set some bounds 
-    params_bkg["p0"] = np.sum(y)
+    if bkg_func_name is not None:
+        params_bkg = config["fit_settings"][bkg_func_name]["init"]
+        bounds_bkg = config["fit_settings"][bkg_func_name]["bounds"]
 
-    # Fit
-    print("\nMinimizing bkg function")
-    loss_bkg = LeastSquares(x, y, dy, bkg_func)
-    m_bkg = Minuit(loss_bkg, **params_bkg)
-    for param_bkg in params_bkg.keys():
-        m_bkg.limits[param_bkg] = bounds_bkg[param_bkg]
-    m_bkg.migrad()
-    m_bkg.hesse()
-    print(m_bkg)
+        #### Manually set some bounds 
+        if bkg_func_name == "mod_exp":
+            params_bkg["p0"] = np.sum(y)
 
-    for param_bkg in params_bkg.keys():
-        params_bkg[param_bkg] = m_bkg.values[param_bkg]
-    y_fit_bkg = bkg_func(x,**params_bkg)
+        # Fit
+        print("\nMinimizing bkg function")
+        loss_bkg = LeastSquares(x, y, dy, bkg_func)
+        m_bkg = Minuit(loss_bkg, **params_bkg)
+        for param_bkg in params_bkg.keys():
+            m_bkg.limits[param_bkg] = bounds_bkg[param_bkg]
+        m_bkg.migrad()
+        m_bkg.hesse()
+        print(m_bkg)
 
-    # Plot
-    plt.rcParams["figure.figsize"] = (12.5, 10.0)
-    fig, axs = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[2, 1], hspace=0.1), sharex=True)
-    hep.histplot(y, bins=x_edges, yerr=dy, ax=axs[0], label=f"Data", histtype='errorbar', color='black', density=False)
-    axs[0].plot(x, y_fit_bkg, label=f"Functional postfit", color="blue")
-    axs[0].set_xlabel("")
-    axs[0].set_ylabel(f"Events/{dx} GeV")
-    axs[0].set_xlim(x_edges[0], x_edges[-1])
-    axs[0].set_yscale('log')
-    axs[0].legend()
-    # Plot the residuals
-    hep.histplot(y - y_fit_bkg, bins=x_edges, yerr=dy, ax=axs[1], label=f"Data", histtype='errorbar', color='black', density=False)
-    axs[1].set_xlabel("Mass [GeV]")
-    axs[1].set_ylabel("Data - Param")
-    axs[1].axhline(0, color='black', linestyle='--')
-    hep.cms.label(data=True, llabel="Private Work", rlabel=r"Level-1 Scouting", ax=axs[0])
-    plt.savefig(f"{plot_dir}/bkg_only_fit.png")
+        for param_bkg in params_bkg.keys():
+            params_bkg[param_bkg] = m_bkg.values[param_bkg]
+        y_fit_bkg = bkg_func(x,**params_bkg)
+
+        # Plot
+        plt.rcParams["figure.figsize"] = (12.5, 10.0)
+        fig, axs = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[2, 1], hspace=0.1), sharex=True)
+        hep.histplot(y, bins=x_edges, yerr=dy, ax=axs[0], label=f"Data", histtype='errorbar', color='black', density=False)
+        axs[0].plot(x, y_fit_bkg, label=f"Functional postfit", color="blue")
+        axs[0].set_xlabel("")
+        axs[0].set_ylabel(f"Events/{dx} GeV")
+        axs[0].set_xlim(x_edges[0], x_edges[-1])
+        axs[0].set_yscale('log')
+        axs[0].legend()
+        # Plot the residuals
+        hep.histplot(y - y_fit_bkg, bins=x_edges, yerr=dy, ax=axs[1], label=f"Data", histtype='errorbar', color='black', density=False)
+        axs[1].set_xlabel("Mass [GeV]")
+        axs[1].set_ylabel("Data - Param")
+        axs[1].axhline(0, color='black', linestyle='--')
+        hep.cms.label(data=True, llabel="Private Work", rlabel=r"Level-1 Scouting", ax=axs[0])
+        plt.savefig(f"{plot_dir}/bkg_only_fit.png")
 
     ####### Signal only fit ########
     sig_func = None
@@ -318,6 +326,9 @@ if __name__ == "__main__":
     if kernel_func_name == "RBF":
         print("\nUsing RBF kernel")
         kernel_func = exponentiated_quadratic
+    elif kernel_func_name == "Gibbs":
+        print("\nUsing Gibbs kernel")
+        kernel_func = modified_gibbs
     else:
         print(f"\nInvalid kernel {kernel_func_name}")
         sys.exit(3)
@@ -339,18 +350,33 @@ if __name__ == "__main__":
             bounds_kernel[param_kernel] = new_bound_kernel
 
     # GPR params depends on choice of signal treatment
-    if config["fit_settings"]["signal"] == 'template':
-        print("\nUsing signal template in GPR")
-        params = [params_bkg[param_name] for param_name in params_bkg.keys()] + [params_kernel[param_name] for param_name in params_kernel.keys()] + [1]
-        bounds = [bounds_bkg[bound_name] for bound_name in bounds_bkg.keys()] + [bounds_kernel[bound_name] for bound_name in bounds_kernel.keys()] + [[-20, 20]]
-    elif config["fit_settings"]["signal"] == 'fit':
-        print("\nUsing signal DSCB fit in GPR")
-        params = [params_bkg[param_name] for param_name in params_bkg.keys()] + [params_sig[param_name] for param_name in params_sig.keys()] + [params_kernel[param_name] for param_name in params_kernel.keys()] + [1]
-        bounds = [bounds_bkg[bound_name] for bound_name in bounds_bkg.keys()] + [bounds_sig[bound_name] for bound_name in bounds_sig.keys()] + [bounds_kernel[bound_name] for bound_name in bounds_kernel.keys()] + [[-20, 20]]
+    if bkg_func_name is not None:
+        if config["fit_settings"]["signal"] == 'template':
+            print("\nUsing signal template in GPR")
+            params = [params_bkg[param_name] for param_name in params_bkg.keys()] + [params_kernel[param_name] for param_name in params_kernel.keys()] + [1]
+            bounds = [bounds_bkg[bound_name] for bound_name in bounds_bkg.keys()] + [bounds_kernel[bound_name] for bound_name in bounds_kernel.keys()] + [[-20, 20]]
+        elif config["fit_settings"]["signal"] == 'fit':
+            print("\nUsing signal DSCB fit in GPR")
+            params = [params_bkg[param_name] for param_name in params_bkg.keys()] + [params_sig[param_name] for param_name in params_sig.keys()] + [params_kernel[param_name] for param_name in params_kernel.keys()] + [1]
+            bounds = [bounds_bkg[bound_name] for bound_name in bounds_bkg.keys()] + [bounds_sig[bound_name] for bound_name in bounds_sig.keys()] + [bounds_kernel[bound_name] for bound_name in bounds_kernel.keys()] + [[-20, 20]]
+        else:
+            print("\nUsing background only (r=0) fit in GPR")
+            params = [params_bkg[param_name] for param_name in params_bkg.keys()] + [params_kernel[param_name] for param_name in params_kernel.keys()] + [0]
+            bounds = [bounds_bkg[bound_name] for bound_name in bounds_bkg.keys()] + [bounds_kernel[bound_name] for bound_name in bounds_kernel.keys()] + [[0, 0]]
     else:
-        print("\nUsing background only (r=0) fit in GPR")
-        params = [params_bkg[param_name] for param_name in params_bkg.keys()] + [params_kernel[param_name] for param_name in params_kernel.keys()] + [0]
-        bounds = [bounds_bkg[bound_name] for bound_name in bounds_bkg.keys()] + [bounds_kernel[bound_name] for bound_name in bounds_kernel.keys()] + [[0, 0]]
+        if config["fit_settings"]["signal"] == 'template':
+            print("\nUsing signal template in GPR")
+            params = [params_kernel[param_name] for param_name in params_kernel.keys()] + [1]
+            bounds = [bounds_kernel[bound_name] for bound_name in bounds_kernel.keys()] + [[-20, 20]]
+        elif config["fit_settings"]["signal"] == 'fit':
+            print("\nUsing signal DSCB fit in GPR")
+            params = [params_sig[param_name] for param_name in params_sig.keys()] + [params_kernel[param_name] for param_name in params_kernel.keys()] + [1]
+            bounds = [bounds_sig[bound_name] for bound_name in bounds_sig.keys()] + [bounds_kernel[bound_name] for bound_name in bounds_kernel.keys()] + [[-20, 20]]
+        else:
+            print("\nUsing background only (r=0) fit in GPR")
+            params = [params_kernel[param_name] for param_name in params_kernel.keys()] + [0]
+            bounds = [bounds_kernel[bound_name] for bound_name in bounds_kernel.keys()] + [[0, 0]]
+
 
     print("\nFitting GPR with")
     print(f"Params: {params}")
@@ -381,7 +407,9 @@ if __name__ == "__main__":
     print("GPR Minuit result: ", result)
     print(f"\nFitted strength: {fit_params[-1]:.2f} +/- {fit_params_err[-1]:.3f}")
 
-    bkg_func_params = fit_params[:len(params_bkg)]
+    bkg_func_params = []
+    if bkg_func_name is not None:
+        bkg_func_params = fit_params[:len(params_bkg)]
     #kernel_params = fit_params[len(params_bkg) + len(params_sig):-1]
 
     if config["fit_settings"]["signal"] == 'template': 
@@ -396,7 +424,8 @@ if __name__ == "__main__":
 
     y_fit_bkg = np.zeros_like(y)
 
-    y_fit_bkg = bkg_func(x, *bkg_func_params)
+    if bkg_func_name is not None:
+        y_fit_bkg = bkg_func(x, *bkg_func_params)
     if config["fit_settings"]["signal"] == 'template': y_fit_sig = y_sig * fit_params[-1]
     elif config["fit_settings"]["signal"] == 'fit': y_fit_sig = sig_func(x, *sig_func_params) * fit_params[-1]
     else: y_fit_sig = np.zeros_like(y)
@@ -495,3 +524,36 @@ if __name__ == "__main__":
         axs[1].set_ylim(-3*max_mag_sig, 3*max_mag_sig)
         hep.cms.label(data=True, llabel="Private Work", rlabel=r"Level-1 Scouting", ax=axs[0])
         plt.savefig(f"{plot_dir}/postfit_residual.png")
+
+    ####### Parametric S+B fit for comparison ########
+    if config["fit_settings"]["signal"] == 'fit':
+        print("Fitting S + B for parametric model")
+        def parametric_model(x, p0, p1, p2, p3, p4, a, mu, sigma, n_low, alpha_low, n_high, alpha_high, r):
+            b = bkg_func(x, p0, p1, p2, p3, p4)
+            s = r * sig_func(x, a, mu, sigma, n_low, alpha_low, n_high, alpha_high)
+            return (s + b)
+
+        #params_parametric = [params_bkg[param_name] for param_name in params_bkg.keys()] + [params_sig[param_name] for param_name in params_sig.keys()] + [1]
+        #bounds_parametric = [bounds_bkg[bound_name] for bound_name in bounds_bkg.keys()] + [bounds_sig[bound_name] for bound_name in bounds_sig.keys()] + [[-20, 20]]
+
+        params_parametric = dict(
+            r = 1,
+            **params_bkg,
+            **params_sig,
+        )
+
+        bounds_parametric = dict(
+            r = [-20, 20],
+            **bounds_bkg,
+            **bounds_sig,
+        )
+
+        loss_parametric_model = LeastSquares(x, y, dy, parametric_model)
+        m_sb = Minuit(loss_parametric_model, **params_parametric)
+        for param_parametric in params_parametric.keys():
+            m_sb.limits[param_parametric] = bounds_parametric[param_parametric]
+        m_sb.migrad()
+        m_sb.hesse()
+        print(m_sb)
+
+        print(f"\nFitted strength (parametric): {m_sb.values["r"]:.2f} +/- {m_sb.errors["r"]:.3f}")
