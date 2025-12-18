@@ -189,6 +189,15 @@ if __name__ == "__main__":
     y_sig = np.array(y_sig)
     dy_sig = np.array(dy_sig)
 
+    # Scale data to pb/GeV if needed
+    if config["fit_settings"]["scale_data"]:
+        print(f"Scaling data to pb/GeV units")
+        x_widths = x_edges[1:] - x_edges[:-1]
+        y = y/(x_widths * config["general"]["lumi"])
+        y_sig = y_sig/(x_widths * config["general"]["lumi"])
+        dy = dy/(x_widths * config["general"]["lumi"])
+        dy_sig = dy_sig/(x_widths * config["general"]["lumi"])
+
     # Inject signal if asked for   
     if (config["general"]["inject_signal"] != 0):
         y = y + (config["general"]["inject_signal"]*y_sig)
@@ -234,8 +243,15 @@ if __name__ == "__main__":
         bounds_bkg = config["fit_settings"][bkg_func_name]["bounds"]
 
         #### Manually set some bounds 
-        if bkg_func_name == "mod_exp":
-            params_bkg["p0"] = np.sum(y)
+        #if bkg_func_name == "mod_exp":
+        #    params_bkg["p0"] = np.sum(y)
+        
+        # Use this to guess the value of p0 
+        print(f"Starting with p0 of {params_bkg["p0"]}")
+        params_bkg["p0"] = 1.0
+        norm_factor_start = np.trapz(bkg_func(x, **params_bkg), x=x)
+        print(f"p0 is {norm_factor_start:.3e} for unit area, multiplying by integral {np.sum(y)*dx:.3e} to get p0 guess of {norm_factor_start*np.sum(y)*dx:.3e}")
+        params_bkg["p0"] = norm_factor_start*np.sum(y)*dx
 
         # Fit
         print("\nMinimizing bkg function")
