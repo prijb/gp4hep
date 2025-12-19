@@ -113,6 +113,7 @@ def gp_template_lml(params, x, y, noise, bkg_func, n_bkg_params, ys, kernel_func
     _, K11_logdet = np.linalg.slogdet(K11)
     return 2.0*(0.5*(YFIT.T @ np.linalg.inv(K11) @ YFIT) + 0.5*K11_logdet + 0.5*np.float64(Y.shape[0])*np.log(2*np.pi))
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_file', default='resolved2016_reg2.root')
@@ -229,6 +230,9 @@ if __name__ == "__main__":
     elif bkg_func_name == "poly_ext":
         print("\nUsing extended polynomial for bkg")
         bkg_func = poly_ext_simpson
+    elif bkg_func_name == "dijet":
+        print("\nUsing dijet function for bkg")
+        bkg_func = dijet_simpson
     elif bkg_func_name == None:
         print("\nNo mean function passed")
     else:
@@ -249,9 +253,10 @@ if __name__ == "__main__":
         # Use this to guess the value of p0 
         print(f"Starting with p0 of {params_bkg["p0"]}")
         params_bkg["p0"] = 1.0
-        norm_factor_start = np.trapz(bkg_func(x, **params_bkg), x=x)
-        print(f"p0 is {norm_factor_start:.3e} for unit area, multiplying by integral {np.sum(y)*dx:.3e} to get p0 guess of {norm_factor_start*np.sum(y)*dx:.3e}")
+        norm_factor_start = 1/(np.trapz(bkg_func(x, **params_bkg), x=x))
+        print(f"p0 is {norm_factor_start:.3e} for unit area for initial parameters, multiplying by integral {np.sum(y)*dx:.3e} to get p0 guess of {norm_factor_start*np.sum(y)*dx:.3e}")
         params_bkg["p0"] = norm_factor_start*np.sum(y)*dx
+        bounds_bkg["p0"] = [0.1*params_bkg["p0"], 10.0*params_bkg["p0"]]
 
         # Fit
         print("\nMinimizing bkg function")
@@ -266,6 +271,8 @@ if __name__ == "__main__":
         for param_bkg in params_bkg.keys():
             params_bkg[param_bkg] = m_bkg.values[param_bkg]
         y_fit_bkg = bkg_func(x,**params_bkg)
+
+        max_residual = 0.0
 
         # Plot
         plt.rcParams["figure.figsize"] = (12.5, 10.0)
@@ -284,6 +291,11 @@ if __name__ == "__main__":
         axs[1].axhline(0, color='black', linestyle='--')
         hep.cms.label(data=True, llabel="Private Work", rlabel=r"Level-1 Scouting", ax=axs[0])
         plt.savefig(f"{plot_dir}/bkg_only_fit.png")
+
+        max_residual = np.max(np.abs(y - y_fit_bkg))
+
+    print(f"The max residual is: {max_residual}")
+
 
     ####### Signal only fit ########
     sig_func = None
@@ -352,6 +364,10 @@ if __name__ == "__main__":
     params_kernel = config["kernel_settings"][kernel_func_name]["init"]
     bounds_kernel = config["kernel_settings"][kernel_func_name]["bounds"]
 
+    # Set kernel variance lower bound to max residual
+    #if max_residual > 0:
+    #    bounds_kernel["variance"][0] = (0.01 * max_residual)**2
+
     if config["kernel_settings"]["exponentiate_params"]:
         for param_kernel in params_kernel.keys():
             params_kernel[param_kernel] = np.log(params_kernel[param_kernel])
@@ -371,10 +387,14 @@ if __name__ == "__main__":
             print("\nUsing signal template in GPR")
             params = [params_bkg[param_name] for param_name in params_bkg.keys()] + [params_kernel[param_name] for param_name in params_kernel.keys()] + [1]
             bounds = [bounds_bkg[bound_name] for bound_name in bounds_bkg.keys()] + [bounds_kernel[bound_name] for bound_name in bounds_kernel.keys()] + [[-20, 20]]
+            # Test: Setting signal bound to [0, 20]
+            bounds[-1] = [0, 20]
         elif config["fit_settings"]["signal"] == 'fit':
             print("\nUsing signal DSCB fit in GPR")
             params = [params_bkg[param_name] for param_name in params_bkg.keys()] + [params_sig[param_name] for param_name in params_sig.keys()] + [params_kernel[param_name] for param_name in params_kernel.keys()] + [1]
             bounds = [bounds_bkg[bound_name] for bound_name in bounds_bkg.keys()] + [bounds_sig[bound_name] for bound_name in bounds_sig.keys()] + [bounds_kernel[bound_name] for bound_name in bounds_kernel.keys()] + [[-20, 20]]
+            # Test: Setting signal bound to [0, 20]
+            bounds[-1] = [0, 20]
         else:
             print("\nUsing background only (r=0) fit in GPR")
             params = [params_bkg[param_name] for param_name in params_bkg.keys()] + [params_kernel[param_name] for param_name in params_kernel.keys()] + [0]
@@ -384,10 +404,14 @@ if __name__ == "__main__":
             print("\nUsing signal template in GPR")
             params = [params_kernel[param_name] for param_name in params_kernel.keys()] + [1]
             bounds = [bounds_kernel[bound_name] for bound_name in bounds_kernel.keys()] + [[-20, 20]]
+            # Test: Setting signal bound to [0, 20]
+            bounds[-1] = [0, 20]
         elif config["fit_settings"]["signal"] == 'fit':
             print("\nUsing signal DSCB fit in GPR")
             params = [params_sig[param_name] for param_name in params_sig.keys()] + [params_kernel[param_name] for param_name in params_kernel.keys()] + [1]
             bounds = [bounds_sig[bound_name] for bound_name in bounds_sig.keys()] + [bounds_kernel[bound_name] for bound_name in bounds_kernel.keys()] + [[-20, 20]]
+            # Test: Setting signal bound to [0, 20]
+            bounds[-1] = [0, 20]
         else:
             print("\nUsing background only (r=0) fit in GPR")
             params = [params_kernel[param_name] for param_name in params_kernel.keys()] + [0]

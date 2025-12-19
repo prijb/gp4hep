@@ -2,6 +2,9 @@
 import numpy as np
 import numba
 
+import jax
+import jax.numpy as jnp
+
 # Function
 @numba.njit
 def DSCB_pdf(x, a, mu, sigma, n_low, alpha_low, n_high, alpha_high):
@@ -68,8 +71,126 @@ def poly_ext_simpson(x, p0, p1, p2, p3, p4):
 
     ya = p0 * ((1 - xa) ** p1) * (1 + (p4*xa)) * (xa ** -(p2 + p3 * np.log(xa)))
     yb = p0 * ((1 - xb) ** p1) * (1 + (p4*xb)) * (xb ** -(p2 + p3 * np.log(xb)))
-    yc = p0 * ((1 - xc) ** p1) * (1 + (p4*xa)) * (xa ** -(p2 + p3 * np.log(xc)))
-    yd = p0 * ((1 - xd) ** p1) * (1 + (p4*xa)) * (xa ** -(p2 + p3 * np.log(xd)))
+    yc = p0 * ((1 - xc) ** p1) * (1 + (p4*xc)) * (xc ** -(p2 + p3 * np.log(xc)))
+    yd = p0 * ((1 - xd) ** p1) * (1 + (p4*xd)) * (xd ** -(p2 + p3 * np.log(xd)))
+
+    y = (1.0/8.0)*(ya + (3*yb) + (3*yc) + yd)
+    return y
+
+@numba.njit
+def dijet_simpson(x, p0, p1, p2, p3, p4):
+    dx = (x[1] - x[0]) * 0.5
+    h = (x[1] - x[0])/3
+    xa = x - dx
+    xb = x - dx + h
+    xc = x - dx + 2*h
+    xd = x + dx
+
+    xa = xa / 13600
+    xb = xb / 13600
+    xc = xc / 13600
+    xd = xd / 13600
+
+    ya = p0 * ((1 - xa) ** p1) * (xa ** -(p2 + p3 * np.log(xa) + (p4 * np.log(xa) * np.log(xa))))
+    yb = p0 * ((1 - xb) ** p1) * (xb ** -(p2 + p3 * np.log(xb) + (p4 * np.log(xb) * np.log(xb))))
+    yc = p0 * ((1 - xc) ** p1) * (xc ** -(p2 + p3 * np.log(xc) + (p4 * np.log(xc) * np.log(xc))))
+    yd = p0 * ((1 - xd) ** p1) * (xd ** -(p2 + p3 * np.log(xd) + (p4 * np.log(xd) * np.log(xd))))
+
+    y = (1.0/8.0)*(ya + (3*yb) + (3*yc) + yd)
+    return y
+
+###### Jax equivalents ########
+def DSCB_pdf_jax(params, x):
+    """
+    Double sided Crystal-Ball
+    
+    https://arxiv.org/abs/1606.03833
+    
+    [floating normalization]
+    
+    Args:
+        par: mu > 0, sigma > 0, n_low > 1, alpha_low > 0, n_high > 1, alpha_high > 0
+    """
+    a = params["a"]
+    mu = params["mu"]
+    sigma = params["sigma"]
+    n_low = params["n_low"]
+    n_high = params["n_high"]
+    alpha_low = params["alpha_low"]
+    alpha_high = params["alpha_high"]
+
+    # Piece wise definition
+    y = 0.0
+    #t = (x - mu) / jnp.max(sigma, EPS)
+    t = (x - mu)/sigma
+
+    core = jnp.exp(-0.5 * t**2)
+    tail_low = (
+        jnp.exp(-0.5 * alpha_low**2)
+        * (alpha_low / n_low * (n_low / alpha_low - alpha_low - t)) ** (-n_low)
+    )
+    tail_high = (
+        jnp.exp(-0.5 * alpha_high**2)
+        * (alpha_high / n_high * (n_high / alpha_high - alpha_high + t)) ** (-n_high)
+    )
+
+    y = jnp.where(
+        t < -alpha_low,
+        tail_low,
+        jnp.where(t > alpha_high, tail_high, core),
+    )
+
+    return a*y
+
+# dx: Bin width
+def mod_exp_simpson_jax(dx, params, x):
+    p0 = params["p0"]
+    p1 = params["p1"]
+    p2 = params["p2"]
+    p3 = params["p3"]
+    p4 = params["p4"]
+
+    h = dx/3.0
+    xa = x - 0.5*dx
+    xb = x - 0.5*dx + h
+    xc = x - 0.5*dx + 2*h
+    xd = x + 0.5*dx
+
+    xa = xa / 13600
+    xb = xb / 13600
+    xc = xc / 13600
+    xd = xd / 13600
+
+    ya = p0 * jnp.exp((p1 * (xa ** p2)) + (p3 * ((1 - xa) ** p4)))
+    yb = p0 * jnp.exp((p1 * (xb ** p2)) + (p3 * ((1 - xb) ** p4)))
+    yc = p0 * jnp.exp((p1 * (xc ** p2)) + (p3 * ((1 - xc) ** p4)))
+    yd = p0 * jnp.exp((p1 * (xd ** p2)) + (p3 * ((1 - xd) ** p4)))
+
+    y = (1.0/8.0)*(ya + (3.0*yb) + (3.0*yc) + yd)
+    return y
+
+def poly_ext_simpson_jax(dx, params, x):
+    p0 = params["p0"]
+    p1 = params["p1"]
+    p2 = params["p2"]
+    p3 = params["p3"]
+    p4 = params["p4"]
+
+    h = dx/3.0
+    xa = x - 0.5*dx
+    xb = x - 0.5*dx + h
+    xc = x - 0.5*dx + 2*h
+    xd = x + 0.5*dx
+
+    xa = xa / 13600
+    xb = xb / 13600
+    xc = xc / 13600
+    xd = xd / 13600
+
+    ya = p0 * ((1 - xa) ** p1) * (1 + (p4*xa)) * (xa ** -(p2 + p3 * jnp.log(xa)))
+    yb = p0 * ((1 - xb) ** p1) * (1 + (p4*xb)) * (xb ** -(p2 + p3 * jnp.log(xb)))
+    yc = p0 * ((1 - xc) ** p1) * (1 + (p4*xa)) * (xa ** -(p2 + p3 * jnp.log(xc)))
+    yd = p0 * ((1 - xd) ** p1) * (1 + (p4*xa)) * (xa ** -(p2 + p3 * jnp.log(xd)))
 
     y = (1.0/8.0)*(ya + (3*yb) + (3*yc) + yd)
     return y

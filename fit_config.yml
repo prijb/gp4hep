@@ -4,9 +4,9 @@ general:
   hist_name_signal: 'h_mjj_sig'
 
   # Signal properties
-  signal_mass: 350 
+  signal_mass: 450 
   xs: 1000
-  lumi: 228
+  lumi: 22.8
   rebin: 5
 
   inject_signal: 0
@@ -16,7 +16,7 @@ fit_settings:
 
   r: 1 # Overrides assumption of 1
 
-  scale_data: True # Scale data to pb/GeV units
+  scale_data: False # Scale data to pb/GeV units
 
   # Description of signal functions (make sure variables are declared in order called)
   signal: 'fit'                 # Options are 'zero', 'template' and 'fit'
@@ -42,6 +42,7 @@ fit_settings:
   # Description of background functions (make sure variables are declared in order called)
   background_function: 'mod_exp'
   #background_function: 'poly_ext' 
+  #background_function: 'dijet'
   #background_function: null
   mod_exp:
     init:
@@ -70,6 +71,20 @@ fit_settings:
       p2: [null, null]
       p3: [null, null]
       p4: [null, null]
+
+  dijet:
+    init:
+      p0: 1.0
+      p1: 9.5
+      p2: 4.5
+      p3: -0.3
+      p4: -0.08
+    bounds:
+      p0: [null, null]
+      p1: [5, 15]
+      p2: [3, 7]
+      p3: [-1, 1]
+      p4: [-1, 1]
 
 kernel_settings:
   exponentiate_params: True     
